@@ -1,8 +1,35 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 import random
+from datetime import datetime
+import os
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+
+# データベース設定
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./omikuji.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# データベースモデル
+class OmikujiHistory(Base):
+    __tablename__ = "omikuji_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fortune = Column(String)
+    description = Column(String)
+    lucky_number = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# データベースの作成
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -24,18 +51,49 @@ fortunes = [
     {"level": "末吉", "description": "少し注意が必要です。", "lucky_number": random.randint(1, 100)}
 ]
 
+# データベースセッションの依存関係
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 @app.get("/")
 async def root():
     return {"message": "こんにちは"}
 
 @app.get("/omikuji")
-async def get_omikuji():
+async def get_omikuji(db: Session = Depends(get_db)):
     fortune = random.choice(fortunes)
+    
+    # データベースに履歴を保存
+    db_history = OmikujiHistory(
+        fortune=fortune["level"],
+        description=fortune["description"],
+        lucky_number=fortune["lucky_number"]
+    )
+    db.add(db_history)
+    db.commit()
+    
     return {
         "運勢": fortune["level"],
         "説明": fortune["description"],
         "ラッキーナンバー": fortune["lucky_number"]
     }
+
+@app.get("/history")
+async def get_history(db: Session = Depends(get_db)):
+    history = db.query(OmikujiHistory).order_by(OmikujiHistory.created_at.desc()).limit(10).all()
+    return [
+        {
+            "運勢": h.fortune,
+            "説明": h.description,
+            "ラッキーナンバー": h.lucky_number,
+            "日時": h.created_at
+        }
+        for h in history
+    ]
 
 # メッセージの作成
 @app.post("/messages/", response_model=Message)
