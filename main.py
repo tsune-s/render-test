@@ -16,7 +16,7 @@ current_id = 1
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World!"}
+    return {"message": "こんにちは"}
 
 # メッセージの作成
 @app.post("/messages/", response_model=Message)
