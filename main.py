@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
+import random
 
 app = FastAPI()
 
@@ -14,9 +15,27 @@ class Message(BaseModel):
 messages = []
 current_id = 1
 
+# おみくじの運勢リスト
+fortunes = [
+    {"level": "大吉", "description": "とても良い運勢です！", "lucky_number": random.randint(1, 100)},
+    {"level": "中吉", "description": "良い運勢です！", "lucky_number": random.randint(1, 100)},
+    {"level": "小吉", "description": "まあまあの運勢です。", "lucky_number": random.randint(1, 100)},
+    {"level": "吉", "description": "普通の運勢です。", "lucky_number": random.randint(1, 100)},
+    {"level": "末吉", "description": "少し注意が必要です。", "lucky_number": random.randint(1, 100)}
+]
+
 @app.get("/")
 async def root():
     return {"message": "こんにちは"}
+
+@app.get("/omikuji")
+async def get_omikuji():
+    fortune = random.choice(fortunes)
+    return {
+        "運勢": fortune["level"],
+        "説明": fortune["description"],
+        "ラッキーナンバー": fortune["lucky_number"]
+    }
 
 # メッセージの作成
 @app.post("/messages/", response_model=Message)
